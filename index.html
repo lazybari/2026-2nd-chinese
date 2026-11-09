@@ -282,8 +282,13 @@ window.addEventListener('error', function (e) {
     String((e && e.message) || '알 수 없는 오류') + ' (줄 ' + ((e && e.lineno) || '?') + ')</pre></div>';
 });
 </script>
+<script type="application/json" id="cfgData"><?!= cfg ?></script>
 <script>
-var CFG = <?!= cfg ?>;
+/* ▼ GitHub Pages 에 올릴 때: 아래 따옴표 안에 Apps Script 웹앱 주소(…/exec)를 넣어요
+     (Apps Script 안에서 열 때는 이 값을 쓰지 않으니 그대로 둬도 괜찮아요) */
+var API_URL = 'https://script.google.com/macros/s/AKfycbzZ_eQl66mkOQQfjGEAkb2qADUPSaH6QotM6BEZQRoy02KFnZwjH9O7jJSXCIqMjck1/exec';
+/* Apps Script 에서 열면 설정이 들어 있고, GitHub 에서 열면 비어 있어요 (로그인 때 받아 옴) */
+var CFG = (function(){ try { return JSON.parse(document.getElementById('cfgData').textContent); } catch(e){ return null; } })();
 </script>
 <script>
 /* ======================== 도우미 ======================== */
@@ -295,8 +300,15 @@ const key = x => String(x).replace(/[\s。．.，,！!？?]/g, '').toLowerCase()
 function uniqBy(list, f){ const seen = new Set(); return list.filter(x => { const k = key(f(x)); if (!k || seen.has(k)) return false; seen.add(k); return true; }); }
 function call(fn){
   const args = Array.prototype.slice.call(arguments, 1);
+  const inGas = !!(window.google && google.script && google.script.run);
+  /* GitHub Pages 등 외부 사이트: Apps Script 웹앱 주소로 요청을 보냄 */
+  if (!inGas && API_URL){
+    return fetch(API_URL, { method:'POST', headers:{ 'Content-Type':'text/plain;charset=utf-8' }, body: JSON.stringify({ fn: fn, args: args }) })
+      .then(r => { if (!r.ok) throw new Error('서버에 연결하지 못했어요 (' + r.status + '). 잠시 뒤 다시 해 주세요.'); return r.json(); })
+      .then(j => { if (!j.ok) throw new Error(j.error); return j.data; });
+  }
   return new Promise((ok, no) => {
-    if (!(window.google && google.script && google.script.run)) return no(new Error('배포한 웹 앱 주소(…/exec)로 열어 주세요.'));
+    if (!inGas) return no(new Error('웹앱 주소가 설정되지 않았어요. 선생님께 말씀해 주세요.'));
     google.script.run.withSuccessHandler(ok).withFailureHandler(no)[fn].apply(null, args);
   });
 }
@@ -480,13 +492,13 @@ function setWho(){
 $('#brand').addEventListener('click', () => { if (S.me) home(); });
 $('#logoutBtn').addEventListener('click', () => {
   if (!confirm('로그아웃할까요? (다른 친구가 이 기기를 쓸 때)')) return;
-  LS.del('cw-me'); S.me = null; S.prog = {}; S.data = {}; setWho(); loginView();
+  LS.del('cw2-me'); S.me = null; S.prog = {}; S.data = {}; setWho(); loginView();
 });
 
 /* ======================== 로그인 ======================== */
 function loginView(msg){
   setWho();
-  const saved = LS.get('cw-me') || {};
+  const saved = LS.get('cw2-me') || {};
   show(`<div class="paper login">
     <div class="seal">中</div>
     <h2>${esc((window.CFG && CFG.title) || '중국어 단어·문장 교실')}</h2>
@@ -507,7 +519,7 @@ function loginView(msg){
     call('login', sid, name).then(r => {
       S.me = { sid: r.sid, name: r.name }; S.title = r.title; S.units = r.units || []; S.prog = r.progress || {};
       if (r.cfg) try { applyFonts(r.cfg); } catch(e){}
-      LS.set('cw-me', S.me); setWho(); home();
+      LS.set('cw2-me', S.me); setWho(); home();
     }).catch(err => {
       $('#lerr').textContent = errText(err); $('#lbtn').disabled = false; $('#lbtn').textContent = '시작하기';
     });
